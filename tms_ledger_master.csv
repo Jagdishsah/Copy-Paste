@@ -1,18 +1,22 @@
 Date,Type,Category,Amount,Status,Due_Date,Ref_ID,Description,Is_Non_Cash,Dispute_Note,Fiscal_Year
-2026-01-01,Load Collateral (Deposit),DEPOSIT,3570,Cleared,2026-01-01,,IPO and FPO,False,,2025/2026
-2026-01-01,Buy Shares (Payable),PAYABLE,3570,Cleared,2026-01-01,,IPO and FPO Buy,False,,2025/2026
-2026-01-02,Sell Shares (Receivable),RECEIVABLE,12852.21,Cleared,2026-01-02,,Sell Dhel and Bandipur,False,,2025/2026
-2026-01-02,Refund Request (Withdraw),WITHDRAW,12852.21,Cleared,2026-01-02,,Sell IPO FPO,False,,2025/2026
-2026-01-08,Load Collateral (Deposit),DEPOSIT,10824.21,Cleared,2026-01-08,568832045,My First Collateral For TMS,False,,2025/2026
-2026-01-18,Buy Shares (Payable),PAYABLE,4544.89,Cleared,2026-01-20,TMS 2026011805015368,ULHC*10 Buy ULHC For Sideway Scalping,False,,2025/2026
-2026-01-20,Buy Shares (Payable),PAYABLE,3759.95,Cleared,2026-01-22,TMS 2026012005031079,TPC*10 Buy TPC With Long Term Trend,False,,2025/2026
-2026-01-29,Buy Shares (Payable),PAYABLE,9501.25,Cleared,2026-01-31,TMS 2026012005031079,[KKHC+NHPC]*20 Circuit Chase,False,,2025/2026
-2026-01-29,Load Collateral (Deposit),DEPOSIT,7000.0,Cleared,2026-01-29,587404287,Depo For NHPC KKHC,False,,2025/2026
-2026-01-29,Sell Shares (Receivable),RECEIVABLE,3820.59,Cleared,2026-02-01,TMS 2026012905016435,TPC*10 Sold TPC at Just Above BE,False,,2025/2026
-2026-02-04,Refund Request (Withdraw),WITHDRAW,3820.59,Cleared,2026-02-04,,TPC Capital Withdraw,False,,2025/2026
-2026-02-04,Buy Shares (Payable),PAYABLE,5114.01,Cleared,2026-02-06,,ULHC*10 TMS 58 Continous Accumulation,False,,2025/2026
-2026-02-04,Load Collateral (Deposit),DEPOSIT,1293.42,Cleared,2026-02-04,WWKXGFPTX19,Payment For ULHC,False,,2025/2026
-2026-02-05,Sell Shares (Receivable),RECEIVABLE,4916.4,Cleared,2026-02-08,,KKHC*20 Sell KKHC Near BE Without Realizing Circuit {Scary Cat Effect},False,,2025/2026
-2026-02-09,Sell Shares (Receivable),RECEIVABLE,2177.67,Cleared,2026-02-12,,NHPC * 10 Partial Sell Near BE to Get Capital Back,False,,2025/2026
-2026-02-10,Buy Shares (Payable),PAYABLE,4372.24,Cleared,2026-02-12,,SGHC * 10 TMS 58 Accumulation Trap,False,,2025/2026
-2026-02-13,Load Collateral (Deposit),DEPOSIT,1100.0,Cleared,2026-02-13,IOAQPW0136K,Due Clearance,False,,2025/2026
+2025-07-18,Buy Shares (Payable),PAYABLE,1570.0,Cleared,2025-07-20,,HBL | BUY | Added 10 units (Notes: My First Share as FPO),False,,2025/2026
+2025-07-31,Buy Shares (Payable),PAYABLE,1000.0,Cleared,2025-08-02,,DHEL | BUY | Bought 10 units (Closed later),False,,2025/2026
+2025-08-27,Buy Shares (Payable),PAYABLE,1000.0,Cleared,2025-08-29,,BANDIPUR | BUY | Bought 10 units (Closed later),False,,2025/2026
+2026-01-04,Sell Shares (Receivable),RECEIVABLE,5509.18,Cleared,2026-01-06,,DHEL | SELL | IPO SEll,False,,2025/2026
+2026-01-04,Sell Shares (Receivable),RECEIVABLE,7343.03,Cleared,2026-01-06,,BANDIPUR | SELL | IPO Sell Maybe Hold Long,False,,2025/2026
+2026-01-18,Buy Shares (Payable),PAYABLE,9658.9,Cleared,2026-01-20,,ULHC | BUY | Added 20 units (Notes: Sideways Scalping),False,,2025/2026
+2026-01-20,Buy Shares (Payable),PAYABLE,3759.95,Cleared,2026-01-22,,TPC | BUY | Bought 10 units (Closed later),False,,2025/2026
+2026-01-29,Buy Shares (Payable),PAYABLE,2248.85,Cleared,2026-01-31,,NHPC | BUY | Bought 10 units (Closed later),False,,2025/2026
+2026-01-29,Buy Shares (Payable),PAYABLE,2248.86,Cleared,2026-01-31,,NHPC | BUY | Added 10 units (Notes: Low Cap and Gamble after 5% Circuit),False,,2025/2026
+2026-01-29,Sell Shares (Receivable),RECEIVABLE,3820.59,Cleared,2026-01-31,,TPC | SELL | After Loss i Chased BE,False,,2025/2026
+2026-01-29,Buy Shares (Payable),PAYABLE,4999.58,Cleared,2026-01-31,,KKHC | BUY | Bought 20 units (Closed later),False,,2025/2026
+2026-02-05,Sell Shares (Receivable),RECEIVABLE,4916.4,Cleared,2026-02-07,,KKHC | SELL | Gamble failed so i chsed BE and sold immediately always do partial Sold,False,,2025/2026
+2026-02-10,Buy Shares (Payable),PAYABLE,4372.24,Cleared,2026-02-12,,SGHC | BUY | Added 10 units (Notes: TMS 58 accumulation but Was Trap),False,,2025/2026
+2026-02-11,Sell Shares (Receivable),RECEIVABLE,2177.67,Cleared,2026-02-13,,NHPC | SELL | Partial sold at Best BE,False,,2025/2026
+2026-02-17,System Update,EXPENSE,0.0,Cleared,2026-02-17,,ACTIVITY_LOG | EDIT | Manually modified via Data Editor,False,,2025/2026
+2026-02-21,Load Collateral (Deposit),DEPOSIT,1100.0,Cleared,2026-02-21,,Recorded Deposit via Global,False,,2025/2026
+2026-02-21,Load Collateral (Deposit),DEPOSIT,1293.42,Cleared,2026-02-21,,Recorded Deposit via Global,False,,2025/2026
+2026-02-21,Sell Shares (Receivable),RECEIVABLE,2177.67,Cleared,2026-02-23,,NHPC * 10 | Recorded Sell via Collateral,False,,2025/2026
+2026-02-21,Buy Shares (Payable),PAYABLE,4372.24,Cleared,2026-02-23,,SGHC * 10 | Recorded Buy via Collateral,False,,2025/2026
+2026-02-21,Sell Shares (Receivable),RECEIVABLE,4916.4,Cleared,2026-02-23,,KKHC*20 | Recorded Sell via Collateral,False,,2025/2026
+2026-02-21,Buy Shares (Payable),PAYABLE,5114.01,Cleared,2026-02-23,,ULHC*10 | Recorded Buy via Collateral,False,,2025/2026
