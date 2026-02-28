@@ -17,9 +17,14 @@ class GitHubConfig:
 
 def load_auth_config() -> AuthConfig | None:
     try:
+        if "auth" in st.secrets:
+            return AuthConfig(
+                username=st.secrets["auth"]["username"],
+                password=st.secrets["auth"]["password"],
+            )
         return AuthConfig(
-            username=st.secrets["auth"]["username"],
-            password=st.secrets["auth"]["password"],
+            username=st.secrets["app_username"],
+            password=st.secrets["app_password"],
         )
     except Exception:
         return None

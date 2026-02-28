@@ -1,40 +1,35 @@
-# Copy-Paste → TMS Ledger Rebuild
+# Copy-Paste — NEPSE Integrated Terminal
 
-This repository now contains a full TMS Ledger implementation inspired by and imported from:
-- https://github.com/Jagdishsah/TMS_Ledger
+A modular Streamlit platform for NEPSE with fully connected data flows between ledger, smart transaction entry, holdings, analytics, and research tools.
 
-## What was done
-- Migrated core features from `TMS_Ledger` into this repository.
-- Refactored the main app into smaller modules and functions under `app/`.
-- Preserved all major pages/features:
-  - Dashboard
-  - New Entry
-  - Ledger History
-  - Analytics
-  - Manage Data
-  - Data Analysis
-  - AI Advisor
-  - Stock Graph
-  - Elliott Wave Scanner
-- Included supporting scripts/data folders from source project.
+## What's improved
+- **Integrated Transaction Center**: Smart entry updates ledger + holdings together.
+- **Research Hub**: Data Studio, AI Advisor, Advanced Analysis, Stock Graph, and Elliott Scanner merged under one unified tab with subtabs.
+- **Flexible secrets auth**: supports both old (`[auth]`) and new (`app_username`, `app_password`) secret formats.
+- **GitHub-backed or local mode** persistence.
 
-## Run
+## Run locally
 ```bash
 pip install -r requirements.txt
 streamlit run TMS_Ledger.py
 ```
 
-## Optional Secrets
-`.streamlit/secrets.toml`
+## Streamlit secrets format
+```toml
+app_username = "your_user"
+app_password = "your_password"
 
+[github]
+token = "ghp_xxx"
+repo_name = "Jagdishsah/Copy-Paste"
+
+[gemini]
+api_key = "your_gemini_key"
+```
+
+(Older auth format still supported)
 ```toml
 [auth]
 username = "your_user"
 password = "your_password"
-
-[github]
-token = "ghp_xxx"
-repo_name = "owner/repo"
 ```
-
-If secrets are not set, app works in local mode with CSV files.

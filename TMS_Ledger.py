@@ -7,13 +7,13 @@ from app.config import load_auth_config, load_github_config
 from app.logic import summarize_ledger
 from app.storage import DataStorage
 from app.ui import (
-    exec_external_script,
     inject_css,
     render_analytics,
     render_dashboard,
     render_history,
     render_manage_data,
     render_new_entry,
+    render_research_hub,
     render_sidebar_holdings,
 )
 
@@ -54,33 +54,24 @@ with st.sidebar:
         "Navigation",
         [
             "🏠 Dashboard",
-            "✍️ New Entry",
+            "✍️ Transaction Center",
             "📜 Ledger History",
             "📊 Analytics",
+            "🧠 Research Hub",
             "🛠️ Manage Data",
-            "📈 Data Analysis",
-            "🤖 AI Advisor",
-            "Stock Graph",
-            "Elliott Wave Scanner",
         ],
     )
     render_sidebar_holdings(storage, holdings_df)
 
 if menu == "🏠 Dashboard":
     render_dashboard(df, summary)
-elif menu == "✍️ New Entry":
-    render_new_entry(df, storage)
+elif menu == "✍️ Transaction Center":
+    render_new_entry(df, holdings_df, storage)
 elif menu == "📜 Ledger History":
     render_history(df)
 elif menu == "📊 Analytics":
-    render_analytics(df)
+    render_analytics(df, holdings_df)
+elif menu == "🧠 Research Hub":
+    render_research_hub()
 elif menu == "🛠️ Manage Data":
     render_manage_data(df, storage)
-elif menu == "📈 Data Analysis":
-    exec_external_script("Data.py", "Data Analysis")
-elif menu == "🤖 AI Advisor":
-    exec_external_script("Advisor.py", "AI Advisor")
-elif menu == "Stock Graph":
-    exec_external_script("Stock_Graph/Graph.py", "Stock Graph")
-elif menu == "Elliott Wave Scanner":
-    exec_external_script("Stock_Graph/Elliot_Wave.py", "Elliott Wave Scanner")
