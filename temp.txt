@@ -1,0 +1,20 @@
+Project context:
+- This is a fresh repo migrated from old TMS_Ledger work.
+- Primary app to continue is `TMS_Ledger_v2.py`.
+- Core modules are in `core/` (`analytics.py`, `config.py`, `storage.py`).
+- Keep legacy files intact unless explicitly asked.
+
+Tasks:
+1) Verify app runs with:
+   - pip install -r requirements.txt
+   - streamlit run TMS_Ledger_v2.py
+2) Review architecture and propose next 3 high-impact upgrades for NEPSE workflow.
+3) Implement those upgrades in small safe commits.
+4) Add/update tests where practical.
+5) Update README with usage notes.
+6) Commit changes and create PR message.
+
+Constraints:
+- Do not break existing CSV compatibility.
+- Keep GitHub + local fallback behavior.
+- Use concise, production-safe error handling.
