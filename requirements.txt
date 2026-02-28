@@ -4,4 +4,4 @@ requests
 beautifulsoup4
 PyGithub
 plotly
-google.generativeai
+google-generativeai
