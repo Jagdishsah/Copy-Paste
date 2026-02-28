@@ -25,6 +25,20 @@ LEDGER_COLUMNS = [
 ]
 HOLDINGS_COLUMNS = ["Symbol", "Total_Qty", "Pledged_Qty", "LTP", "Haircut"]
 
+TERMINAL_SCHEMAS = {
+    "portfolio.csv": ["Symbol", "Sector", "Units", "Total_Cost", "WACC", "Buy_Date", "Stop_Loss", "Notes"],
+    "watchlist.csv": ["Symbol", "Target", "Remark"],
+    "activity_log.csv": ["Timestamp", "Category", "Symbol", "Action", "Details", "Amount"],
+    "history.csv": ["Date", "Buy_Date", "Symbol", "Units", "Buy_Price", "Sell_Price", "Invested_Amount", "Received_Amount", "Net_PL", "PL_Pct", "Reason"],
+    "diary.csv": ["Date", "Symbol", "Note", "Emotion", "Mistake", "Strategy"],
+    "cache.csv": ["Symbol", "LTP", "Change", "High52", "Low52", "LastUpdated"],
+    "wealth.csv": ["Date", "Total_Investment", "Current_Value", "Total_PL", "Day_Change", "Sold_Volume"],
+    "price_log.csv": ["Date", "Symbol", "LTP"],
+    "Data.csv": ["Date", "Realized_PL", "Realized_PL_Pct", "Unrealized_PL", "Unrealized_PL_Pct"],
+    "error_log.csv": ["Date", "Time", "Context", "Error_Message", "Traceback"],
+    "tms/tms_trx.csv": ["Date", "Stock", "Type", "Medium", "Amount", "Charge", "Remark", "Reference"],
+}
+
 
 class DataStorage:
     def __init__(self, github_config: GitHubConfig | None, local_root: Path):
@@ -60,7 +74,9 @@ class DataStorage:
                 repo.update_file(file.path, message, csv_content, file.sha)
             except Exception:
                 repo.create_file(filename, f"Create {filename}", csv_content)
-        (self.local_root / filename).write_text(csv_content, encoding="utf-8")
+        path = self.local_root / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(csv_content, encoding="utf-8")
 
     def get_ledger(self) -> pd.DataFrame:
         df = self._read_csv(LEDGER_FILE, LEDGER_COLUMNS)
@@ -89,3 +105,20 @@ class DataStorage:
 
     def save_holdings(self, data: pd.DataFrame) -> None:
         self._save_csv(HOLDINGS_FILE, data[HOLDINGS_COLUMNS], "Update Holdings")
+
+    def get_terminal_data(self, filename: str) -> pd.DataFrame:
+        cols = TERMINAL_SCHEMAS.get(filename, [])
+        df = self._read_csv(filename, cols)
+        for col in cols:
+            if col not in df.columns:
+                df[col] = ""
+        return df[cols] if cols else df
+
+    def save_terminal_data(self, filename: str, data: pd.DataFrame) -> None:
+        cols = TERMINAL_SCHEMAS.get(filename)
+        if cols:
+            for col in cols:
+                if col not in data.columns:
+                    data[col] = ""
+            data = data[cols]
+        self._save_csv(filename, data, f"Update {filename}")

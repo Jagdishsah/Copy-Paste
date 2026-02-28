@@ -16,6 +16,7 @@ from app.ui import (
     render_research_hub,
     render_sidebar_holdings,
 )
+from app.terminal_ui import render_terminal_hub
 
 
 st.set_page_config(page_title="NEPSE TMS Pro Ledger", page_icon="💹", layout="wide", initial_sidebar_state="expanded")
@@ -57,6 +58,7 @@ with st.sidebar:
             "✍️ Transaction Center",
             "📜 Ledger History",
             "📊 Analytics",
+            "🖥️ Terminal Hub",
             "🧠 Research Hub",
             "🛠️ Manage Data",
         ],
@@ -71,6 +73,8 @@ elif menu == "📜 Ledger History":
     render_history(df)
 elif menu == "📊 Analytics":
     render_analytics(df, holdings_df)
+elif menu == "🖥️ Terminal Hub":
+    render_terminal_hub(storage, df, holdings_df)
 elif menu == "🧠 Research Hub":
     render_research_hub()
 elif menu == "🛠️ Manage Data":

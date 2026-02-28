@@ -1,20 +1,28 @@
-# Copy-Paste — NEPSE Integrated Terminal
+# Copy-Paste — NEPSE Unified Intelligence Terminal
 
-A modular Streamlit platform for NEPSE with fully connected data flows between ledger, smart transaction entry, holdings, analytics, and research tools.
+A fully integrated Streamlit platform for NEPSE that combines TMS ledger operations, holdings synchronization, research tools, and Nepse_Terminal data workflows in one modular app.
 
-## What's improved
-- **Integrated Transaction Center**: Smart entry updates ledger + holdings together.
-- **Research Hub**: Data Studio, AI Advisor, Advanced Analysis, Stock Graph, and Elliott Scanner merged under one unified tab with subtabs.
-- **Flexible secrets auth**: supports both old (`[auth]`) and new (`app_username`, `app_password`) secret formats.
-- **GitHub-backed or local mode** persistence.
+## Major redesign
+- **Transaction Center** with Smart Entry that updates **ledger + holdings together**.
+- **Terminal Hub** absorbed from Nepse_Terminal data model:
+  - Portfolio, Watchlist, History, Diary, Cache, Activity, Wealth Curve
+  - Unified activity stream merges terminal logs + ledger events.
+  - Wealth snapshot derives from integrated ledger/holdings/history state.
+- **Research Hub** groups advanced pages into subtabs:
+  - Data Studio
+  - AI Advisor
+  - Advanced Analysis
+  - Visual Analysis
+  - Stock Graph
+  - Elliott Scanner
 
-## Run locally
+## Run
 ```bash
 pip install -r requirements.txt
 streamlit run TMS_Ledger.py
 ```
 
-## Streamlit secrets format
+## Secrets (supported)
 ```toml
 app_username = "your_user"
 app_password = "your_password"
@@ -27,9 +35,13 @@ repo_name = "Jagdishsah/Copy-Paste"
 api_key = "your_gemini_key"
 ```
 
-(Older auth format still supported)
+Legacy auth format also works:
 ```toml
 [auth]
 username = "your_user"
 password = "your_password"
 ```
+
+## Included integrated datasets
+- Ledger and holdings: `tms_ledger_master.csv`, `tms_holdings.csv`
+- Terminal datasets: `portfolio.csv`, `watchlist.csv`, `activity_log.csv`, `history.csv`, `diary.csv`, `cache.csv`, `wealth.csv`, `price_log.csv`, `Data.csv`, `error_log.csv`, `tms/tms_trx.csv`

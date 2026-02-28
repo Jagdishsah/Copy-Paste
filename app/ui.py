@@ -208,7 +208,7 @@ def exec_external_script(path: str, label: str) -> None:
 def render_research_hub() -> None:
     st.header("🧠 Research Hub")
     st.caption("All advanced tools grouped into one place for faster workflow.")
-    t1, t2, t3, t4, t5 = st.tabs(["Data Studio", "AI Advisor", "Advanced Analysis", "Stock Graph", "Elliott Scanner"])
+    t1, t2, t3, t4, t5, t6 = st.tabs(["Data Studio", "AI Advisor", "Advanced Analysis", "Visual Analysis", "Stock Graph", "Elliott Scanner"])
     with t1:
         exec_external_script("Data.py", "Data Analysis")
     with t2:
@@ -216,8 +216,10 @@ def render_research_hub() -> None:
     with t3:
         exec_external_script("Data_analysis/Advanced_analysis.py", "Advanced Analysis")
     with t4:
-        exec_external_script("Stock_Graph/Graph.py", "Stock Graph")
+        exec_external_script("Data_analysis/Visual.py", "Visual Analysis")
     with t5:
+        exec_external_script("Stock_Graph/Graph.py", "Stock Graph")
+    with t6:
         exec_external_script("Stock_Graph/Elliot_Wave.py", "Elliott Wave Scanner")
 
 
