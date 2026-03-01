@@ -35,9 +35,12 @@ def load_auth_config() -> AuthConfig | None:
 def load_supabase_config() -> SupabaseConfig | None:
     try:
         cfg = st.secrets.get("supabase", {})
+        key = cfg.get("service_key") or cfg.get("service_role_key") or cfg.get("key")
+        if not cfg.get("url") or not key:
+            return None
         return SupabaseConfig(
             url=str(cfg["url"]),
-            key=str(cfg["service_key"]),
+            key=str(key),
             table=str(cfg.get("table", "app_files")),
         )
     except Exception:

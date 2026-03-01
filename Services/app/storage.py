@@ -67,6 +67,11 @@ class DataStorage:
     def _table_name(self, logical_key: str) -> str:
         return logical_key.replace("/", "__")
 
+    def _use_supabase(self) -> bool:
+        if not self.supabase.enabled():
+            return False
+        return self.storage_config.backend in {"supabase", "csv"}
+
     def _resolve(self, logical_key: str) -> str:
         return PATHS.get(logical_key, logical_key)
 
@@ -90,7 +95,7 @@ class DataStorage:
         if self.storage_config.backend == "sqlite":
             return self._read_sqlite(logical_key, columns)
 
-        if self.storage_config.backend == "supabase":
+        if self._use_supabase():
             df = self.supabase.read_csv(rel_path, columns)
             if not df.empty:
                 return df
@@ -105,12 +110,17 @@ class DataStorage:
         if self.storage_config.backend == "sqlite":
             self._save_sqlite(logical_key, data)
 
-        if self.storage_config.backend == "supabase":
+        if self._use_supabase():
             self.supabase.write_csv(rel_path, data)
 
         path = self.local_root / rel_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(data.to_csv(index=False), encoding="utf-8")
+
+    def active_backend(self) -> str:
+        if self._use_supabase():
+            return "supabase"
+        return self.storage_config.backend
 
     def get_ledger(self) -> pd.DataFrame:
         df = self._read("ledger", LEDGER_COLUMNS)
@@ -159,7 +169,7 @@ class DataStorage:
 
     def list_stock_data_files(self) -> list[str]:
         rel_dir = PATHS["stock_data_dir"]
-        if self.storage_config.backend == "supabase":
+        if self._use_supabase():
             files = self.supabase.list_paths(rel_dir + "/")
             if files:
                 return sorted([Path(p).name for p in files])
@@ -178,7 +188,7 @@ class DataStorage:
 
     def list_analysis_files(self) -> list[str]:
         rel_dir = PATHS["data_analysis_dir"]
-        if self.storage_config.backend == "supabase":
+        if self._use_supabase():
             files = self.supabase.list_paths(rel_dir + "/")
             if files:
                 return sorted([Path(p).name for p in files])

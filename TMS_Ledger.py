@@ -67,6 +67,7 @@ storage = DataStorage(supabase_config=load_supabase_config(), local_root=Path(".
 with st.sidebar:
     st.title("💹 TMS Pro")
     selected = st.radio("Navigation", list(TAB_ROUTES.keys()))
+    st.caption(f"Storage backend: {storage.active_backend()}")
     render_sidebar_holdings(storage, storage.get_holdings())
 
 run_tab(TAB_ROUTES[selected], storage)
