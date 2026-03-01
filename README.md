@@ -1,94 +1,67 @@
-diff --git a/README.md b/README.md
-index f5f79157af50c1afcdf6e8cd9b8328fb09891413..91ed40c4b05108bdbfa667abd160f79e48f2edef 100644
---- a/README.md
-+++ b/README.md
-@@ -1,2 +1,36 @@
--# TMS_Ledger
--this Github Is Made To Make New Project that will track my all Money Movement and other Aspects In My TMS
-+# TMS Ledger (NEPSE)
-+
-+A Streamlit-based personal trading operations platform for NEPSE (Nepal Stock Exchange) workflows:
-+- Cash movement and broker ledger tracking
-+- T+2 settlement monitoring
-+- Collateral/pledge tracking
-+- Broker data analysis and charting tools
-+
-+## What is new
-+This repo now includes an **isolated V2 app** for safer testing:
-+- `TMS_Ledger_v2.py` (new testable command center)
-+- `core/` modules for cleaner architecture (`config`, `storage`, `analytics`)
-+
-+Your old app (`TMS_Ledger.py`) is still present, so you can compare and migrate gradually.
-+
-+## Quick Start
-+```bash
-+pip install -r requirements.txt
-+streamlit run TMS_Ledger_v2.py
-+```
-+
-+## Optional Secrets (`.streamlit/secrets.toml`)
-+```toml
-+[auth]
-+username = "your_user"
-+password = "your_password"
-+
-+[github]
-+token = "ghp_xxx"
-+repo_name = "owner/repo"
-+```
-+
-+If GitHub config is missing, V2 runs in **local fallback mode** and writes CSV files directly in the project directory.
-+
-+## Why isolated V2?
-+You asked for full freedom to redesign while keeping risk low. So V2 is delivered as a separate runtime target where you can test everything first before replacing old pages.
+# NEPSE Unified Intelligence Terminal (Enterprise Layout)
 
+This repo has been restructured into a strict enterprise hierarchy.
 
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/README.md b/README.md
-index f5f79157af50c1afcdf6e8cd9b8328fb09891413..91ed40c4b05108bdbfa667abd160f79e48f2edef 100644
---- a/README.md
-+++ b/README.md
-@@ -1,2 +1,36 @@
--# TMS_Ledger
--this Github Is Made To Make New Project that will track my all Money Movement and other Aspects In My TMS
-+# TMS Ledger (NEPSE)
-+
-+A Streamlit-based personal trading operations platform for NEPSE (Nepal Stock Exchange) workflows:
-+- Cash movement and broker ledger tracking
-+- T+2 settlement monitoring
-+- Collateral/pledge tracking
-+- Broker data analysis and charting tools
-+
-+## What is new
-+This repo now includes an **isolated V2 app** for safer testing:
-+- `TMS_Ledger_v2.py` (new testable command center)
-+- `core/` modules for cleaner architecture (`config`, `storage`, `analytics`)
-+
-+Your old app (`TMS_Ledger.py`) is still present, so you can compare and migrate gradually.
-+
-+## Quick Start
-+```bash
-+pip install -r requirements.txt
-+streamlit run TMS_Ledger_v2.py
-+```
-+
-+## Optional Secrets (`.streamlit/secrets.toml`)
-+```toml
-+[auth]
-+username = "your_user"
-+password = "your_password"
-+
-+[github]
-+token = "ghp_xxx"
-+repo_name = "owner/repo"
-+```
-+
-+If GitHub config is missing, V2 runs in **local fallback mode** and writes CSV files directly in the project directory.
-+
-+## Why isolated V2?
-+You asked for full freedom to redesign while keeping risk low. So V2 is delivered as a separate runtime target where you can test everything first before replacing old pages.
+## Folder architecture
 
+```text
+Services/
+  app/
+    config.py
+    logic.py
+    storage.py
+    transactions.py
+    market_predictor.py
+    terminal_ui.py
+    ui.py
+    logger.py
+    services/
+      signals.py
+      risk.py
+      portfolio.py
+  Data.py
+  Advisor.py
+  scrape.py
+  Stock_Graph/
 
+Tabs/
+  1_Dashboard/portfolio_view.py
+  2_Transaction_Center/transaction_view.py
+  3_Ledger_History/history_view.py
+  4_Analytics/analytics_view.py
+  5_Terminal_Hub/terminal_view.py
+  6_Research_Hub/research_view.py
+  7_Manage_Data/manage_view.py
+  8_Market_Predictor/market_predictor_view.py
 
+Data/
+  User_Data/
+  TMS_Data/
+  Logs/
+  Market_Data/
+```
 
+## Routing model
+- `TMS_Ledger.py` now acts as a **custom router**.
+- It loads tab modules from `Tabs/**` using `importlib.util.spec_from_file_location` and calls `render(storage)`.
+- The Streamlit `pages/` dependency is removed.
 
+## Data paths
+All core data paths are centralized in `Services/app/storage.py` under `PATHS`.
+This enforces strict relative-path consistency across Services/Tabs.
+
+## Run
+```bash
+pip install -r requirements.txt
+streamlit run TMS_Ledger.py
+```
+
+## Optional storage backend
+```toml
+[storage]
+backend = "sqlite"          # csv | sqlite
+sqlite_path = "data/terminal.db"
+```
+
+## Suggested next-level upgrade
+For even stronger enterprise quality, introduce a domain-layer package (`domain/`) with Pydantic schemas for each row type (ledger, tms_trx, cache, history) and force schema validation before every write.
