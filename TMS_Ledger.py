@@ -3,7 +3,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from Services.app.config import load_auth_config, load_github_config, load_storage_config
+from Services.app.config import load_auth_config, load_storage_config, load_supabase_config
 from Services.app.storage import DataStorage
 from Services.app.ui import inject_css, render_sidebar_holdings
 
@@ -20,6 +20,7 @@ TAB_ROUTES = {
     "🧠 Research Hub": Path("Tabs/6_Research_Hub/research_view.py"),
     "🛠️ Manage Data": Path("Tabs/7_Manage_Data/manage_view.py"),
     "🔮 Market Predictor": Path("Tabs/8_Market_Predictor/market_predictor_view.py"),
+    "♻️ Restore": Path("Tabs/9_Restore/restore_view.py"),
 }
 
 
@@ -61,7 +62,7 @@ if not check_login():
     st.stop()
 
 inject_css()
-storage = DataStorage(github_config=load_github_config(), local_root=Path("."), storage_config=load_storage_config())
+storage = DataStorage(supabase_config=load_supabase_config(), local_root=Path("."), storage_config=load_storage_config())
 
 with st.sidebar:
     st.title("💹 TMS Pro")

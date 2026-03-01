@@ -262,13 +262,12 @@ def _run_tool(module_name: str, label: str) -> None:
 
 def _signal_lab() -> None:
     st.subheader("📡 Signal Lab (Buy/Sell Scan)")
-    path = Path("Data/Market_Data/Stock_Data")
-    csv_files = sorted([f.name for f in path.glob("*.csv")])
+    csv_files = storage.list_stock_data_files()
     if not csv_files:
         st.info("No stock files in Stock_Data.")
         return
     sel = st.selectbox("Choose stock data", csv_files, key="signal_lab_stock")
-    df = pd.read_csv(path / sel)
+    df = storage.get_stock_data(sel)
 
     for col in ["Close", "LTP", "close"]:
         if col in df.columns:

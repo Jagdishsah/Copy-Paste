@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 import streamlit as st
 
+from Services.app.supabase_store import SupabaseConfig
+
 
 @dataclass
 class AuthConfig:
@@ -10,14 +12,8 @@ class AuthConfig:
 
 
 @dataclass
-class GitHubConfig:
-    token: str
-    repo_name: str
-
-
-@dataclass
 class StorageConfig:
-    backend: str = "csv"  # csv | sqlite
+    backend: str = "supabase"  # supabase | csv | sqlite
     sqlite_path: str = "data/terminal.db"
 
 
@@ -36,12 +32,22 @@ def load_auth_config() -> AuthConfig | None:
         return None
 
 
-def load_github_config() -> GitHubConfig | None:
+def load_supabase_config() -> SupabaseConfig | None:
     try:
-        return GitHubConfig(
-            token=st.secrets["github"]["token"],
-            repo_name=st.secrets["github"]["repo_name"],
+        cfg = st.secrets.get("supabase", {})
+        return SupabaseConfig(
+            url=str(cfg["url"]),
+            key=str(cfg["service_key"]),
+            table=str(cfg.get("table", "app_files")),
         )
+    except Exception:
+        return None
+
+
+def load_github_config() -> dict[str, str] | None:
+    try:
+        cfg = st.secrets.get("github", {})
+        return {"token": str(cfg["token"]), "repo_name": str(cfg["repo_name"])}
     except Exception:
         return None
 
@@ -50,7 +56,7 @@ def load_storage_config() -> StorageConfig:
     try:
         cfg = st.secrets.get("storage", {})
         return StorageConfig(
-            backend=str(cfg.get("backend", "csv")).lower(),
+            backend=str(cfg.get("backend", "supabase")).lower(),
             sqlite_path=str(cfg.get("sqlite_path", "data/terminal.db")),
         )
     except Exception:
