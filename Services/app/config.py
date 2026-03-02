@@ -4,18 +4,15 @@ import streamlit as st
 
 from Services.app.supabase_store import SupabaseConfig
 
-
 @dataclass
 class AuthConfig:
     username: str
     password: str
 
-
 @dataclass
 class StorageConfig:
-    backend: str = "supabase"  # supabase | csv | sqlite
+    backend: str = "supabase"
     sqlite_path: str = "data/terminal.db"
-
 
 def load_auth_config() -> AuthConfig | None:
     try:
@@ -31,21 +28,29 @@ def load_auth_config() -> AuthConfig | None:
     except Exception:
         return None
 
-
 def load_supabase_config() -> SupabaseConfig | None:
+    # UPDATED: We now check the root SUPABASE_URL and SUPABASE_KEY 
+    # that your login system in TMS_Ledger.py uses!
     try:
-        cfg = st.secrets.get("supabase", {})
-        key = cfg.get("service_key") or cfg.get("service_role_key") or cfg.get("key")
-        if not cfg.get("url") or not key:
+        url = st.secrets.get("SUPABASE_URL")
+        key = st.secrets.get("SUPABASE_KEY")
+        
+        if not url or not key:
+            # Fallback to check if it's nested in a [supabase] block just in case
+            cfg = st.secrets.get("supabase", {})
+            url = cfg.get("url")
+            key = cfg.get("key") or cfg.get("service_key")
+            
+        if not url or not key:
             return None
+            
         return SupabaseConfig(
-            url=str(cfg["url"]),
+            url=str(url),
             key=str(key),
-            table=str(cfg.get("table", "app_files")),
+            table="app_Files", # Keep this case-sensitive to match your SQL DB
         )
     except Exception:
         return None
-
 
 def load_github_config() -> dict[str, str] | None:
     try:
@@ -53,7 +58,6 @@ def load_github_config() -> dict[str, str] | None:
         return {"token": str(cfg["token"]), "repo_name": str(cfg["repo_name"])}
     except Exception:
         return None
-
 
 def load_storage_config() -> StorageConfig:
     try:
