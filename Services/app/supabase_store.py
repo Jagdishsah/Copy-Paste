@@ -7,14 +7,14 @@ from typing import Any
 
 import pandas as pd
 import requests
-import streamlit as st # Added to fetch user_id
+import streamlit as st
 
 
 @dataclass
 class SupabaseConfig:
     url: str
     key: str
-    table: str = "app_Files" # Updated to match SQL case sensitivity
+    table: str = "app_Files"
 
 
 class SupabaseFileStore:
@@ -29,20 +29,18 @@ class SupabaseFileStore:
     def _headers(self) -> dict[str, str]:
         assert self.config is not None
         
-        # We MUST pass the auth token of the logged-in user so RLS policies allow the request!
         headers = {
             "apikey": self.config.key,
             "Content-Type": "application/json",
             "Prefer": "return=representation"
         }
         
-        # Grab the JWT token from the session state if a user is logged in
-        if "user" in st.session_state and hasattr(st.session_state["user"], 'access_token'):
-            # Ideally, the supabase client handles this. Since you use raw requests, we need the user's JWT
-            # Wait, the auth.users(id) RLS uses the JWT token. 
-            # If we don't have the explicit JWT easily accessible, we might hit RLS blocks.
-            # Let's try passing the basic service key auth first. If it fails, we will pivot to the official client.
-            headers["Authorization"] = f"Bearer {self.config.key}" 
+        # 🛡️ THE FIX: Send the User's JWT token to pass Row Level Security (RLS)!
+        if "access_token" in st.session_state:
+            headers["Authorization"] = f"Bearer {st.session_state['access_token']}"
+        else:
+            # Fallback to anon key (API Gateway requires an Authorization header)
+            headers["Authorization"] = f"Bearer {self.config.key}"
             
         return headers
 
@@ -51,7 +49,6 @@ class SupabaseFileStore:
         return f"{self.config.url.rstrip('/')}/rest/v1/{self.config.table}"
         
     def _get_current_user_id(self) -> str | None:
-        """Helper to get the user UUID securely"""
         if "user_id" in st.session_state:
             return st.session_state["user_id"]
         return None
@@ -75,13 +72,12 @@ class SupabaseFileStore:
             
         user_id = self._get_current_user_id()
         if not user_id:
-            return None # Cannot read without a user
+            return None 
 
         def _op():
             resp = requests.get(
                 self._endpoint(),
                 headers=self._headers(),
-                # Updated 'path' to 'file_name' and added user_id filter
                 params={"select": "content", "file_name": f"eq.{file_name}", "user_id": f"eq.{user_id}", "limit": 1},
                 timeout=20,
             )
@@ -91,8 +87,7 @@ class SupabaseFileStore:
 
         try:
             return self._with_retry(_op)
-        except Exception as e:
-            st.error(f"Read Error: {e}")
+        except Exception:
             return None
 
     def write_text(self, file_name: str, content: str) -> None:
@@ -104,13 +99,12 @@ class SupabaseFileStore:
             raise RuntimeError("Cannot save file: No user logged in.")
 
         def _op():
-            # Updated to match the new SQL schema (user_id, file_name, content)
             payload = [{"file_name": file_name, "content": content, "user_id": user_id}]
             
             resp = requests.post(
                 self._endpoint(),
+                # Merge Prefer headers safely
                 headers={**self._headers(), "Prefer": "resolution=merge-duplicates"},
-                # Conflict is resolved on the UNIQUE constraint we made: (user_id, file_name)
                 params={"on_conflict": "user_id,file_name"}, 
                 json=payload,
                 timeout=20,
