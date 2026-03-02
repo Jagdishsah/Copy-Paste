@@ -35,9 +35,11 @@ if "user" not in st.session_state:
         try:
             res = supabase.auth.sign_in_with_password({"email": email, "password": password})
             st.session_state["user"] = res.user
+            # 👇 ADD THIS LINE to save the user's security token!
+            st.session_state["access_token"] = res.session.access_token 
             st.rerun()
         except Exception as e:
-            st.error(f"Login Failed: Invalid email or password.")
+            st.error("Login Failed: Invalid email or password.")
             
     if signup_btn:
         try:
