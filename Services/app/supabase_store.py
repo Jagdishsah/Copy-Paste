@@ -32,26 +32,23 @@ class SupabaseFileStore:
         headers = {
             "apikey": self.config.key,
             "Content-Type": "application/json",
-            "Prefer": "return=representation"
         }
         
-        # 🛡️ THE FIX: Send the User's JWT token to pass Row Level Security (RLS)!
+        # Send the User's JWT token to pass Row Level Security (RLS)
         if "access_token" in st.session_state:
             headers["Authorization"] = f"Bearer {st.session_state['access_token']}"
         else:
-            # Fallback to anon key (API Gateway requires an Authorization header)
             headers["Authorization"] = f"Bearer {self.config.key}"
             
         return headers
 
-    def _endpoint(self) -> str:
+    def _endpoint(self, table_name: str | None = None) -> str:
         assert self.config is not None
-        return f"{self.config.url.rstrip('/')}/rest/v1/{self.config.table}"
+        target = table_name or self.config.table
+        return f"{self.config.url.rstrip('/')}/rest/v1/{target}"
         
     def _get_current_user_id(self) -> str | None:
-        if "user_id" in st.session_state:
-            return st.session_state["user_id"]
-        return None
+        return st.session_state.get("user_id")
 
     def _with_retry(self, fn):
         err: Exception | None = None
@@ -66,19 +63,25 @@ class SupabaseFileStore:
             raise err
         return None
 
-    def read_text(self, file_name: str) -> str | None:
+    def read_text(self, file_name: str, table: str = "app_Files") -> str | None:
         if not self.enabled():
             return None
             
         user_id = self._get_current_user_id()
-        if not user_id:
-            return None 
 
         def _op():
+            # Build query parameters
+            params = {"select": "content", "file_name": f"eq.{file_name}", "limit": 1}
+            
+            # Only filter by user_id if we are accessing the private table
+            if table == "app_Files":
+                if not user_id: return None
+                params["user_id"] = f"eq.{user_id}"
+
             resp = requests.get(
-                self._endpoint(),
+                self._endpoint(table),
                 headers=self._headers(),
-                params={"select": "content", "file_name": f"eq.{file_name}", "user_id": f"eq.{user_id}", "limit": 1},
+                params=params,
                 timeout=20,
             )
             resp.raise_for_status()
@@ -90,42 +93,50 @@ class SupabaseFileStore:
         except Exception:
             return None
 
-    def write_text(self, file_name: str, content: str) -> None:
+    def write_text(self, file_name: str, content: str, table: str = "app_Files") -> None:
         if not self.enabled():
             raise RuntimeError("Supabase is not configured")
             
         user_id = self._get_current_user_id()
         if not user_id:
-            raise RuntimeError("Cannot save file: No user logged in.")
+            raise RuntimeError("Cannot save: No user logged in.")
 
         def _op():
-            payload = [{"file_name": file_name, "content": content, "user_id": user_id}]
+            if table == "app_Files":
+                payload = {"file_name": file_name, "content": content, "user_id": user_id}
+                conflict_param = "user_id,file_name"
+            else:
+                # Public table uses file_name as PK, we track last_updated_by
+                payload = {"file_name": file_name, "content": content, "last_updated_by": user_id}
+                conflict_param = "file_name"
             
             resp = requests.post(
-                self._endpoint(),
-                # Merge Prefer headers safely
+                self._endpoint(table),
                 headers={**self._headers(), "Prefer": "resolution=merge-duplicates"},
-                params={"on_conflict": "user_id,file_name"}, 
-                json=payload,
+                params={"on_conflict": conflict_param}, 
+                json=[payload],
                 timeout=20,
             )
             resp.raise_for_status()
 
         self._with_retry(_op)
 
-    def list_paths(self, prefix: str) -> list[str]:
+    def list_paths(self, prefix: str, table: str = "app_Files") -> list[str]:
         if not self.enabled():
             return []
             
         user_id = self._get_current_user_id()
-        if not user_id:
-            return []
 
         def _op():
+            params = {"select": "file_name", "file_name": f"like.{prefix}%"}
+            if table == "app_Files":
+                if not user_id: return []
+                params["user_id"] = f"eq.{user_id}"
+
             resp = requests.get(
-                self._endpoint(),
+                self._endpoint(table),
                 headers=self._headers(),
-                params={"select": "file_name", "file_name": f"like.{prefix}%", "user_id": f"eq.{user_id}"},
+                params=params,
                 timeout=20,
             )
             resp.raise_for_status()
@@ -137,11 +148,11 @@ class SupabaseFileStore:
         except Exception:
             return []
 
-    def read_csv(self, file_name: str, columns: list[str]) -> pd.DataFrame:
-        text = self.read_text(file_name)
+    def read_csv(self, file_name: str, columns: list[str], table: str = "app_Files") -> pd.DataFrame:
+        text = self.read_text(file_name, table=table)
         if not text:
             return pd.DataFrame(columns=columns)
         return pd.read_csv(StringIO(text))
 
-    def write_csv(self, file_name: str, data: pd.DataFrame) -> None:
-        self.write_text(file_name, data.to_csv(index=False))
+    def write_csv(self, file_name: str, data: pd.DataFrame, table: str = "app_Files") -> None:
+        self.write_text(file_name, data.to_csv(index=False), table=table)
