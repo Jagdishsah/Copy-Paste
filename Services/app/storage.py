@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from pathlib import Path
 
 import pandas as pd
 
 from Services.app.config import StorageConfig
+from Services.app.logger import log_event
 from Services.app.supabase_store import SupabaseConfig, SupabaseFileStore
 
 LEDGER_COLUMNS = [
@@ -63,6 +65,14 @@ class DataStorage:
         self.sqlite_path = (local_root / self.storage_config.sqlite_path).resolve()
         self.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
         self.supabase = SupabaseFileStore(supabase_config)
+        self.last_write_status: dict[str, str | bool] = {
+            "ok": True,
+            "backend": self.active_backend(),
+            "path": "",
+            "remote_ok": True,
+            "local_ok": True,
+            "error": "",
+        }
 
     def _table_name(self, logical_key: str) -> str:
         return logical_key.replace("/", "__")
@@ -105,22 +115,79 @@ class DataStorage:
             return pd.read_csv(path)
         return pd.DataFrame(columns=columns)
 
+    def _set_status(self, *, ok: bool, path: str, remote_ok: bool, local_ok: bool, error: str = "") -> None:
+        self.last_write_status = {
+            "ok": ok,
+            "backend": self.active_backend(),
+            "path": path,
+            "remote_ok": remote_ok,
+            "local_ok": local_ok,
+            "error": error,
+        }
+
     def _save(self, logical_key: str, data: pd.DataFrame, message: str) -> None:
         rel_path = self._resolve(logical_key)
+        remote_ok = True
+        local_ok = True
+        err = ""
+
         if self.storage_config.backend == "sqlite":
             self._save_sqlite(logical_key, data)
 
         if self._use_supabase():
-            self.supabase.write_csv(rel_path, data)
+            try:
+                self.supabase.write_csv(rel_path, data)
+            except Exception as ex:
+                remote_ok = False
+                err = f"Supabase write failed: {ex}"
 
-        path = self.local_root / rel_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(data.to_csv(index=False), encoding="utf-8")
+        try:
+            path = self.local_root / rel_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(data.to_csv(index=False), encoding="utf-8")
+        except Exception as ex:
+            local_ok = False
+            err = f"{err} | Local mirror write failed: {ex}".strip(" |")
+
+        ok = remote_ok and local_ok if self._use_supabase() else local_ok
+        self._set_status(ok=ok, path=rel_path, remote_ok=remote_ok, local_ok=local_ok, error=err)
+
+        log_event(
+            "storage_write",
+            {
+                "path": rel_path,
+                "message": message,
+                "backend": self.active_backend(),
+                "ok": ok,
+                "remote_ok": remote_ok,
+                "local_ok": local_ok,
+                "error": err,
+            },
+        )
+
+        if not ok:
+            raise RuntimeError(err or "Storage write failed")
 
     def active_backend(self) -> str:
         if self._use_supabase():
             return "supabase"
         return self.storage_config.backend
+
+    def get_storage_health(self) -> dict[str, str | bool]:
+        return self.last_write_status
+
+    def last_write_ok(self) -> bool:
+        return bool(self.last_write_status.get("ok", False))
+
+    def import_legacy_csv(self, rel_path: str, data: pd.DataFrame, skip_if_same: bool = True) -> bool:
+        existing = self._read(rel_path, list(data.columns))
+        if skip_if_same and not existing.empty:
+            old = existing.to_csv(index=False)
+            new = data.to_csv(index=False)
+            if hashlib.sha256(old.encode()).hexdigest() == hashlib.sha256(new.encode()).hexdigest():
+                return False
+        self._save(rel_path, data, "Import legacy CSV")
+        return True
 
     def get_ledger(self) -> pd.DataFrame:
         df = self._read("ledger", LEDGER_COLUMNS)

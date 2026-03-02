@@ -1,50 +1,42 @@
-Supabase Integration Working Notes (How It Works)
-=================================================
+Supabase Integration - Complete Working Specification
+====================================================
 
-1) Objective
-------------
-The app stores business datasets (ledger, holdings, logs, analysis files, stock files) in Supabase using a file-like model.
-Each logical file path maps to one row in Supabase table `app_files`:
-- `path`   : unique logical path key (e.g., Data/TMS_Data/tms_ledger_master.csv)
-- `content`: full CSV text payload
+1) Purpose
+----------
+This project uses Supabase as the canonical persistence backend for CSV-shaped datasets via a path->content model in table `app_files`.
 
-2) Main Components
-------------------
-A. `Services/app/supabase_store.py`
-- `SupabaseConfig`:
-  - `url`  : Supabase project URL
-  - `key`  : service key used for REST API calls
-  - `table`: storage table name (default: app_files)
+2) Core Integration Modules
+---------------------------
+A. Services/app/supabase_store.py
+- Provides `SupabaseFileStore`:
+  - read_text(path)
+  - write_text(path, content)
+  - list_paths(prefix)
+  - read_csv(path, columns)
+  - write_csv(path, dataframe)
+- Includes retry/backoff for transient errors.
 
-- `SupabaseFileStore` methods:
-  - `enabled()` : verifies config present
-  - `_endpoint()` : builds REST endpoint `/rest/v1/<table>`
-  - `read_text(path)` : fetches row by `path`
-  - `write_text(path, content)` : upserts row using `on_conflict=path`
-  - `list_paths(prefix)` : lists CSV paths under prefix
-  - `read_csv(path, columns)` : reads CSV into DataFrame
-  - `write_csv(path, df)` : DataFrame -> CSV text -> write_text
+B. Services/app/storage.py
+- Provides `DataStorage` abstraction used by all UI tabs.
+- Routes reads/writes across:
+  - Supabase (preferred when configured),
+  - sqlite (optional),
+  - local mirror fallback.
+- Tracks last write health:
+  - ok
+  - backend
+  - path
+  - remote_ok
+  - local_ok
+  - error
+- Emits structured storage logs via `log_event`.
 
-B. `Services/app/storage.py`
-- Central abstraction used by all UI tabs.
-- Uses Supabase when credentials are available and backend allows it.
-- Also keeps local mirror in repository file paths.
-- Provides high-level typed methods:
-  - Ledger: `get_ledger`, `save_ledger`
-  - Holdings: `get_holdings`, `save_holdings`
-  - Terminal datasets: `get_terminal_data`, `save_terminal_data`
-  - Stock datasets: `list_stock_data_files`, `get_stock_data`, `save_stock_data`
-  - Analysis datasets: `list_analysis_files`, `get_analysis_data`, `save_analysis_data`
+C. restore.py
+- Imports legacy GitHub CSV datasets into active storage backend.
+- Uses public `import_legacy_csv` with idempotency (skip unchanged).
 
-C. `Services/app/config.py`
-- Reads secrets from Streamlit secrets.
-- Supabase keys supported:
-  - `service_key` (preferred)
-  - `service_role_key`
-  - `key`
-
-3) Secret Structure (expected)
-------------------------------
+3) Secret Schema (Streamlit)
+----------------------------
 app_username = "King"
 app_password = "HelloWorld"
 
@@ -63,65 +55,63 @@ table = "app_files"
 [storage]
 backend = "supabase"
 
-4) Runtime Flow
+Supported Supabase key aliases in code:
+- service_key
+- service_role_key
+- key
+
+4) Data Model
+-------------
+Table: app_files
+Required columns:
+- path (text, unique or primary key)
+- content (text)
+Recommended:
+- updated_at (timestamp, optional)
+
+Storage convention examples:
+- Data/TMS_Data/tms_ledger_master.csv
+- Data/TMS_Data/tms_holdings.csv
+- Data/Logs/activity_log.csv
+- Data/Market_Data/Stock_Data/<SYMBOL>.csv
+
+5) Runtime Save Workflow
+------------------------
+1. UI action calls a storage save API.
+2. Storage normalizes DataFrame schema.
+3. Storage attempts Supabase upsert with retry/backoff.
+4. Storage writes local mirror file.
+5. Storage records write health status and logs a `storage_write` event.
+6. On failure, storage raises exception so UI can show explicit error (no false success).
+
+6) Runtime Read Workflow
+------------------------
+1. Try Supabase read first (if active).
+2. Fallback to local mirror file.
+3. Fallback to empty DataFrame with expected columns.
+
+7) Health & Diagnostics
+-----------------------
+- Sidebar shows active backend.
+- Manage Data tab includes storage health panel.
+- App writes structured events to `logs/app_events.jsonl`.
+
+8) Restore/Migration Behavior
+-----------------------------
+- Restore scans GitHub logical CSV paths and directory CSV files.
+- Each file imported via idempotent API:
+  - changed files -> imported
+  - identical files -> skipped
+- Summary shows imported/skipped/failed.
+
+9) Known Limits
 ---------------
-1. Streamlit app boots in `TMS_Ledger.py`.
-2. App loads auth + storage + Supabase config.
-3. `DataStorage` instance is created and passed to all tabs.
-4. User action (e.g., transaction save) calls storage save method.
-5. Save method:
-   - normalizes dataframe schema
-   - writes to Supabase row keyed by logical `path`
-   - writes same CSV to local mirror file
-6. Read methods reverse this:
-   - try Supabase first (if active)
-   - fallback to local mirror
-   - fallback to empty DataFrame with expected columns
+- CSV-blob strategy still has last-write-wins under concurrent edits.
+- Large files can increase latency.
+- Full overwrite on save is not row-level transactional.
 
-5) Restore / Migration Path
----------------------------
-- `restore.py` fetches legacy CSV files from GitHub repo via PAT.
-- For each discovered file, it writes dataset into current storage backend (Supabase).
-- This allows one-time migration from GitHub-hosted CSV to Supabase-backed storage.
-
-6) Why Transactions Could Seem Saved but Not Persisted
-------------------------------------------------------
-Typical causes:
-- Backend mis-set to `csv` while expecting cloud-only persistence.
-- Invalid/expired Supabase key.
-- Network/API failure with only local mirror succeeding.
-- Table missing required unique constraint on `path`.
-
-Current mitigation in code:
-- Supabase can be activated when config exists even with legacy backend value.
-- Sidebar can display active storage backend.
-
-7) Required Supabase Table Behavior
------------------------------------
-Recommended table schema:
-- path text primary key (or unique)
-- content text
-- optional updated_at timestamp default now()
-
-Upsert relies on:
-- conflict target = `path`
-
-8) Known Limitations
---------------------
-- Whole CSV replaced on each save (last-write-wins risk).
-- Large files increase payload and latency.
-- Blob-style CSV storage is not relationally query-efficient.
-
-9) Recommended Next Steps
+10) Recommended Evolution
 -------------------------
-- Add write status telemetry and user-visible cloud write confirmation.
-- Add integration tests against Supabase test project.
-- Gradually migrate high-volume datasets to normalized Supabase tables.
-- Keep CSV layer as compatibility/export adapter.
-
-10) Quick Verification Checklist
---------------------------------
-- Confirm Streamlit secrets contain valid supabase url/key.
-- Confirm sidebar shows `Storage backend: supabase`.
-- Create transaction and verify corresponding path row updated in `app_files`.
-- Restart app and ensure same transaction reloads from Supabase.
+- Add optimistic concurrency/version tokens.
+- Add CI integration tests against Supabase test environment.
+- Migrate high-volume entities to normalized relational tables.

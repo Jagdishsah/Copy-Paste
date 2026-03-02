@@ -1,119 +1,90 @@
-Latest Architecture & Quality Review Report
-==========================================
+Latest Architecture & Improvement Report
+=======================================
 Date: 2026-03-02
 Repository: Copy-Paste
-Focus: Supabase-backed Streamlit TMS Ledger
 
-1) Executive Summary
---------------------
-The project has successfully moved critical persistence logic into a centralized storage layer and now supports Supabase-backed CSV persistence through `Services/app/storage.py` + `Services/app/supabase_store.py`.
+Executive Summary
+-----------------
+This revision implemented the major improvement backlog previously identified:
+1) explicit storage-write reliability and visibility,
+2) retry/backoff for transient Supabase failures,
+3) idempotent restore behavior,
+4) structured storage event logging,
+5) diagnostics surfacing in UI,
+6) stronger regression testing for storage paths.
 
-The strongest qualities are:
-- clear separation of UI and storage concerns,
-- a restore path for legacy GitHub data,
-- flexible backend toggles (supabase/sqlite/local mirror),
-- practical user workflows in transaction and terminal tabs.
-
-Main weaknesses are:
-- partial fallback patterns can hide cloud-write failures,
-- no end-to-end tests for real Supabase integration,
-- direct use of internal `_save` in restore tool,
-- potential long-term performance/scalability limits from "CSV-as-record" strategy in a single table.
-
-2) Good Sides (What is done well)
----------------------------------
-A. Storage Abstraction
-- `DataStorage` centralizes read/write/list logic and avoids duplication.
-- Core methods (`get_ledger`, `save_ledger`, `get_terminal_data`, etc.) provide stable data contracts.
-- Local mirror write is practical for local debugging and disaster fallback.
-
-B. Supabase Integration
-- `SupabaseFileStore` uses straightforward REST calls and is easy to inspect/debug.
-- Path-based storage convention makes migration from GitHub simple and low-risk.
-- Credentials are loaded via Streamlit secrets with configurable table names.
-
-C. UX / Product
-- Smart transaction flow updates multiple datasets in one action.
-- Restore tab provides one-click migration for old GitHub CSVs.
-- Rich visual modules and analytical views remain available after backend migration.
-
-D. Maintainability
-- Logical grouping in `Services/app/*` is clean.
-- Strong use of pandas normalization in data workflows.
-- Existing tests already cover key transaction and signal paths.
-
-3) Bad Sides (Current Problems)
+What Was Improved (Implemented)
 -------------------------------
-A. Silent Failure Risk
-- Some storage calls can fail remotely while local mirror still succeeds, causing user confusion.
-- UI success messages may appear even if remote persistence fails in edge cases.
+1. Reliability Hardening
+- Added retry/backoff in Supabase REST operations (`SupabaseFileStore`) for read/list/write operations.
+- Write path now raises on persistent failure instead of silently succeeding.
+- Storage write status is captured in-memory (`last_write_status`) and exposed via health helpers.
 
-B. Testing Gaps
-- No true integration tests against Supabase API.
-- No test for failed Supabase writes + UI error propagation.
-- No test for restore completeness and data integrity after migration.
+2. Observability and Diagnostics
+- Added structured storage event logging via `log_event` for every storage write attempt.
+- Added storage health panel in Data Management UI to inspect last write path/backend/error/flags.
+- Kept backend indicator in sidebar to reduce deployment confusion.
 
-C. Internal API Coupling
-- `restore.py` uses internal/private-style storage call (`_save`) instead of public dedicated import API.
+3. Save-Flow Safety in UI
+- Wrapped key save operations in transaction/holding/manual entry flows with try/except and user-facing failure messages.
+- Prevents misleading success notifications when persistence fails.
 
-D. Data Model Limits
-- Persisting entire CSV payloads in one row (`path`,`content`) can become expensive with growth.
-- Concurrent writes from multiple sessions can cause last-write-wins data loss.
+4. Restore Robustness
+- Reworked restore logic to be idempotent using public `import_legacy_csv` API.
+- Added "skipped unchanged" accounting to avoid duplicate/no-op reimports.
+- Removed direct reliance on internal `_save` in restore flow.
 
-E. Operational Observability
-- No explicit persistence health panel (e.g., last cloud write status, latency, error counts).
-- Limited structured error logs for storage-level incidents.
+5. API Improvements
+- Added `import_legacy_csv` public API to storage abstraction.
+- Added `get_storage_health` and `last_write_ok` for operational checks.
 
-4) Room for Improvement
------------------------
-A. Reliability
-- Add explicit "remote write success" checks and show user-level warnings if remote write fails.
-- Add transactional retry with exponential backoff for transient network failures.
+6. Test Coverage Improvements
+- Added storage test for:
+  - Supabase usage when backend value is `csv` but Supabase is configured.
+  - Idempotent legacy import behavior.
 
-B. Testing
-- Add Supabase integration test suite (can run only in CI with test credentials).
-- Add regression tests for multi-user write conflict scenarios.
+Current Good Sides
+------------------
+- Centralized storage abstraction with runtime backend introspection.
+- Better reliability and failure visibility for transaction persistence.
+- More production-friendly restore migration behavior.
+- Improved diagnostics and event traces for debugging cloud incidents.
+- Backward-safe local mirror still available for offline fallback.
 
-C. API Design
-- Introduce public methods like `import_legacy_csv(path, df)` to replace direct `_save` usage.
-- Add storage exceptions with clear error categories (auth/network/schema).
+Remaining Bad Sides / Open Risks
+--------------------------------
+1) Data model is still CSV-blob based per path:
+- Large datasets can be slow to overwrite.
+- Concurrent writes are still last-write-wins.
 
-D. Data Strategy
-- Long-term: move from monolithic CSV blobs to normalized Supabase tables for ledger/holdings/history.
-- Keep CSV export/import for compatibility but not as primary persistent format.
+2) No live Supabase integration tests in CI:
+- Unit tests cover behavior, but not end-to-end auth/network/table policy issues.
 
-E. Security & Ops
-- Add startup validation for required secrets and visible diagnostics in admin tab.
-- Add key-rotation guidance and table RLS guidance for production hardening.
+3) No conflict/version metadata on writes:
+- Parallel sessions can overwrite changes.
 
-5) Future Problems that may appear
-----------------------------------
-- Increased latency and payload size as CSV grows.
-- Data races when multiple users save same logical file simultaneously.
-- Restore duplication if migration is executed repeatedly without conflict checks.
-- Potential schema drift between historical CSV columns and UI assumptions.
-- Difficulty auditing row-level changes from blob-based CSV storage.
+4) Diagnostics are local-app oriented:
+- No external monitoring/alerting yet.
 
-6) Recommendations (Priority-ordered)
--------------------------------------
-P0 (Immediate)
-- Add explicit remote-write status verification and UI feedback.
-- Add integration test for `save_ledger` + `save_terminal_data` to real Supabase test table.
-- Add restore idempotency checks.
+Future Problems to Watch
+------------------------
+- Multi-user race conditions on same logical file.
+- Growing payload size and write latency.
+- Potential schema drift if CSV columns evolve without migration policy.
 
-P1 (Next sprint)
-- Introduce conflict metadata (version/hash/timestamp) for safer merges.
-- Add storage diagnostics panel in Manage/Restore tab.
-- Add structured logging around all Supabase requests.
-
-P2 (Strategic)
-- Migrate high-value entities to normalized Supabase relational tables.
-- Keep CSV adapter only for import/export and backward compatibility.
-
-7) Final Assessment
+Priority Next Steps
 -------------------
-Overall quality: Good and improving.
-Architecture direction: Correct.
-Current operational risk: Moderate (mostly around hidden failures and concurrency limits).
+P0
+- Add optional optimistic concurrency token (hash/version) in `app_files` rows.
+- Add integration test suite with Supabase test project in CI.
 
-If the P0 items are completed, production reliability and trust in transaction persistence will improve significantly.
+P1
+- Add write-latency and error counters to admin dashboard.
+- Add explicit migration/version metadata per logical dataset.
+
+P2
+- Gradually migrate critical entities (ledger, holdings, transactions) from CSV blobs to normalized Supabase tables.
+
+Final Assessment
+----------------
+Architecture is now significantly more robust than earlier versions and addresses the primary trust issue (false success on failed persistence). The remaining limitations are mostly strategic scalability concerns, not immediate correctness blockers.

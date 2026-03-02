@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -9,7 +9,7 @@ def log_event(event: str, payload: dict, log_path: str = "logs/app_events.jsonl"
     path = Path(log_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     row = {
-        "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "ts": datetime.now(UTC).isoformat(timespec="seconds"),
         "event": event,
         "payload": payload,
     }

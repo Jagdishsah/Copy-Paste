@@ -70,13 +70,16 @@ def render_sidebar_holdings(storage: DataStorage, holdings_df: pd.DataFrame) -> 
         qty = c1.number_input("Pledged Qty", min_value=0)
         ltp = c2.number_input("LTP", min_value=0.0)
         if st.button("Update Stock") and sym:
-            curr_h = storage.get_holdings()
-            curr_h = curr_h[curr_h["Symbol"] != sym]
-            new_h = pd.DataFrame([{"Symbol": sym, "Total_Qty": qty, "Pledged_Qty": qty, "LTP": ltp, "Haircut": 25}])
-            storage.save_holdings(pd.concat([curr_h, new_h], ignore_index=True))
-            _append_activity(storage, "TMS", sym, "HOLDING_UPDATE", "Updated holding from sidebar", 0.0)
-            st.success(f"Updated {sym}")
-            st.rerun()
+            try:
+                curr_h = storage.get_holdings()
+                curr_h = curr_h[curr_h["Symbol"] != sym]
+                new_h = pd.DataFrame([{"Symbol": sym, "Total_Qty": qty, "Pledged_Qty": qty, "LTP": ltp, "Haircut": 25}])
+                storage.save_holdings(pd.concat([curr_h, new_h], ignore_index=True))
+                _append_activity(storage, "TMS", sym, "HOLDING_UPDATE", "Updated holding from sidebar", 0.0)
+                st.success(f"Updated {sym}")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Save failed: {e}")
 
         if not holdings_df.empty:
             st.dataframe(holdings_df[["Symbol", "Total_Qty", "Pledged_Qty", "LTP"]], height=170, width="stretch")
@@ -145,13 +148,16 @@ def render_new_entry(df: pd.DataFrame, holdings_df: pd.DataFrame, storage: DataS
             )
             row = smart_to_ledger_row(txn)
             normalized_amount = row["Amount"] if mode in {"DEPOSIT", "SELL", "RECEIVABLE"} else -row["Amount"]
-            new_ledger, new_holdings = apply_smart_transaction(df, holdings_df, txn)
-            storage.save_ledger(new_ledger)
-            storage.save_holdings(new_holdings)
-            _sync_tms_trx(storage, txn, medium, normalized_amount)
-            _append_activity(storage, "TMS", symbol or "N/A", mode, final_desc, normalized_amount)
-            st.success("Smart transaction saved. All connected datasets synced.")
-            st.rerun()
+            try:
+                new_ledger, new_holdings = apply_smart_transaction(df, holdings_df, txn)
+                storage.save_ledger(new_ledger)
+                storage.save_holdings(new_holdings)
+                _sync_tms_trx(storage, txn, medium, normalized_amount)
+                _append_activity(storage, "TMS", symbol or "N/A", mode, final_desc, normalized_amount)
+                st.success("Smart transaction saved. All connected datasets synced.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Smart transaction failed to persist: {e}")
 
     with tab2:
         with st.form("entry_form"):
@@ -186,10 +192,13 @@ def render_new_entry(df: pd.DataFrame, holdings_df: pd.DataFrame, storage: DataS
                         "Fiscal_Year": fiscal_year_for_nepal(txn_date),
                     }
                 ])
-                storage.save_ledger(pd.concat([df, new_row], ignore_index=True))
-                _append_activity(storage, "TMS", "N/A", "MANUAL_LEDGER", final_desc, float(amount))
-                st.success("Manual entry saved.")
-                st.rerun()
+                try:
+                    storage.save_ledger(pd.concat([df, new_row], ignore_index=True))
+                    _append_activity(storage, "TMS", "N/A", "MANUAL_LEDGER", final_desc, float(amount))
+                    st.success("Manual entry saved.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Manual entry failed to persist: {e}")
 
 
 def render_history(df: pd.DataFrame) -> None:
@@ -334,6 +343,12 @@ def render_research_hub(storage: DataStorage) -> None:
 
 def render_manage_data(df: pd.DataFrame, storage: DataStorage) -> None:
     st.header("🛠️ Data Management")
+    with st.expander("🩺 Storage Health", expanded=False):
+        health = storage.get_storage_health()
+        st.json(health)
+        if not health.get("ok", True):
+            st.warning("Last write had an issue. Please review the error and retry.")
+
     if df.empty:
         st.info("No data to manage.")
         return
