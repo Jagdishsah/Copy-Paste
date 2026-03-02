@@ -58,6 +58,10 @@ class DataStorage:
     def _read(self, logical_key: str, columns: list[str]) -> pd.DataFrame:
         rel_path = PATHS.get(logical_key, logical_key)
         target_table = self._get_target_table(logical_key, rel_path)
+        # Add this decorator to your read methods
+        @st.cache_data(ttl=300) # Cache for 5 minutes
+        def get_cached_prices(self):
+            return self._read("cache", ["Symbol", "LTP", "Change"])
 
         if self.supabase.enabled():
             df, version = self.supabase.read_csv(rel_path, columns, table=target_table)
