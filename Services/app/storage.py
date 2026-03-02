@@ -40,9 +40,16 @@ class DataStorage:
         self.local_root = local_root
         self.storage_config = storage_config or StorageConfig()
         self.supabase = SupabaseFileStore(supabase_config)
-        # Session state based version cache to prevent cross-user conflicts
+        
+        # Initialize version cache in session state
         if "version_cache" not in st.session_state:
             st.session_state["version_cache"] = {}
+
+    def active_backend(self) -> str:
+        """Returns the current active storage backend name for the UI."""
+        if self.supabase.enabled() and self.storage_config.backend == "supabase":
+            return "Supabase Cloud"
+        return "Local Filesystem"
 
     def _get_target_table(self, logical_key: str, rel_path: str) -> str:
         is_public = logical_key in PUBLIC_KEYS or any(rel_path.startswith(PATHS.get(k, "NONE")) for k in ["stock_data_dir", "data_analysis_dir"])
@@ -54,27 +61,27 @@ class DataStorage:
 
         if self.supabase.enabled():
             df, version = self.supabase.read_csv(rel_path, columns, table=target_table)
-            # Store version for later validation on save
             st.session_state["version_cache"][rel_path] = version
             return df
+        
+        # Fallback to local if needed (optional based on your setup)
         return pd.DataFrame(columns=columns)
 
     def _save(self, logical_key: str, data: pd.DataFrame, message: str) -> None:
         rel_path = PATHS.get(logical_key, logical_key)
         target_table = self._get_target_table(logical_key, rel_path)
         
-        # 🛡️ DOMAIN VALIDATION
+        # Validation
         if logical_key in MODEL_MAP:
             model = MODEL_MAP[logical_key]
             try:
                 records = data.to_dict('records')
                 for rec in records:
-                    model(**rec) # Pydantic will raise error if data is bad
+                    model(**rec)
             except Exception as e:
                 raise ValueError(f"Data Validation Error for {logical_key}: {e}")
 
         if self.supabase.enabled():
-            # 🚀 CONCURRENCY LOCK: Get the version we read earlier
             version = st.session_state["version_cache"].get(rel_path)
             try:
                 self.supabase.write_csv(rel_path, data, table=target_table, version=version)
@@ -87,7 +94,8 @@ class DataStorage:
         df = self._read("ledger", LEDGER_COLUMNS)
         if df.empty: return pd.DataFrame(columns=LEDGER_COLUMNS)
         for c in ["Date", "Due_Date"]:
-            if c in df.columns: df[c] = pd.to_datetime(df[c], errors='coerce').dt.date
+            if c in df.columns:
+                df[c] = pd.to_datetime(df[c], errors='coerce').dt.date
         return df[LEDGER_COLUMNS]
 
     def save_ledger(self, data: pd.DataFrame) -> None:
@@ -102,10 +110,7 @@ class DataStorage:
     def save_holdings(self, data: pd.DataFrame) -> None:
         self._save("holdings", data, "Update Holdings")
 
-    def list_stock_data_files(self) -> list[str]:
-        files = self.supabase.list_paths(PATHS["stock_data_dir"] + "/", table="public_Files")
-        return sorted([Path(p).name for p in files])
-
-    def save_stock_data(self, filename: str, data: pd.DataFrame) -> None:
-        safe = filename if filename.endswith(".csv") else f"{filename}.csv"
-        self._save(f"{PATHS['stock_data_dir']}/{safe}", data, f"Update {safe}")
+    def import_legacy_csv(self, path: str, df: pd.DataFrame, skip_if_same: bool = False) -> bool:
+        """Helper to migrate old local data to the new cloud system."""
+        self._save(path, df, f"Imported legacy data to {path}")
+        return True
