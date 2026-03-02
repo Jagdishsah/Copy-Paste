@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import sqlite3
 from pathlib import Path
 
 import pandas as pd
@@ -34,6 +33,14 @@ PATHS = {
     "data_analysis_dir": "Data/Market_Data/Data_analysis",
 }
 
+# 🚀 PUBLIC ROUTING: These keys go to 'public_Files' table
+PUBLIC_KEYS = {
+    "cache", 
+    "price_log", 
+    "stock_data_dir", 
+    "data_analysis_dir"
+}
+
 TERMINAL_SCHEMAS = {
     "portfolio": ["Symbol", "Sector", "Units", "Total_Cost", "WACC", "Buy_Date", "Stop_Loss", "Notes"],
     "watchlist": ["Symbol", "Target", "Remark"],
@@ -53,19 +60,15 @@ class DataStorage:
     def __init__(self, supabase_config: SupabaseConfig | None, local_root: Path, storage_config: StorageConfig | None = None):
         self.local_root = local_root
         self.storage_config = storage_config or StorageConfig()
-        self.sqlite_path = (local_root / self.storage_config.sqlite_path).resolve()
         self.supabase = SupabaseFileStore(supabase_config)
         self.last_write_status: dict[str, str | bool] = {
             "ok": True,
             "backend": self.active_backend(),
             "path": "",
             "remote_ok": True,
-            "local_ok": False, # Local is permanently disabled
+            "local_ok": False,
             "error": "",
         }
-
-    def _table_name(self, logical_key: str) -> str:
-        return logical_key.replace("/", "__")
 
     def _use_supabase(self) -> bool:
         return self.supabase.enabled()
@@ -73,58 +76,44 @@ class DataStorage:
     def _resolve(self, logical_key: str) -> str:
         return PATHS.get(logical_key, logical_key)
 
+    def _get_target_table(self, logical_key: str, rel_path: str) -> str:
+        # Check if key is explicitly public or lives in a public directory
+        is_public = (
+            logical_key in PUBLIC_KEYS or 
+            any(rel_path.startswith(PATHS[k]) for k in ["stock_data_dir", "data_analysis_dir"])
+        )
+        return "public_Files" if is_public else "app_Files"
+
     def _read(self, logical_key: str, columns: list[str]) -> pd.DataFrame:
         rel_path = self._resolve(logical_key)
+        target_table = self._get_target_table(logical_key, rel_path)
 
-        # Strictly enforce Supabase Reads
         if self._use_supabase():
-            df = self.supabase.read_csv(rel_path, columns)
+            df = self.supabase.read_csv(rel_path, columns, table=target_table)
             if not df.empty:
                 return df
                 
-        # Return empty DataFrame if no data exists in Supabase
         return pd.DataFrame(columns=columns)
-
-    def _set_status(self, *, ok: bool, path: str, remote_ok: bool, local_ok: bool, error: str = "") -> None:
-        self.last_write_status = {
-            "ok": ok,
-            "backend": self.active_backend(),
-            "path": path,
-            "remote_ok": remote_ok,
-            "local_ok": local_ok,
-            "error": error,
-        }
 
     def _save(self, logical_key: str, data: pd.DataFrame, message: str) -> None:
         rel_path = self._resolve(logical_key)
+        target_table = self._get_target_table(logical_key, rel_path)
         remote_ok = True
         err = ""
 
-        # Strictly enforce Supabase Writes (No Local File System)
         if self._use_supabase():
             try:
-                self.supabase.write_csv(rel_path, data)
+                self.supabase.write_csv(rel_path, data, table=target_table)
             except Exception as ex:
                 remote_ok = False
                 err = f"Supabase write failed: {ex}"
         else:
             remote_ok = False
-            err = "Cloud Storage Error: Supabase is not configured properly in secrets.toml"
+            err = "Cloud Storage Error: Supabase is not configured."
 
-        self._set_status(ok=remote_ok, path=rel_path, remote_ok=remote_ok, local_ok=False, error=err)
+        self.last_write_status.update({"ok": remote_ok, "path": rel_path, "error": err})
 
-        log_event(
-            "storage_write",
-            {
-                "path": rel_path,
-                "message": message,
-                "backend": self.active_backend(),
-                "ok": remote_ok,
-                "remote_ok": remote_ok,
-                "local_ok": False,
-                "error": err,
-            },
-        )
+        log_event("storage_write", {"path": rel_path, "table": target_table, "ok": remote_ok, "error": err})
 
         if not remote_ok:
             raise RuntimeError(err)
@@ -132,73 +121,38 @@ class DataStorage:
     def active_backend(self) -> str:
         return "supabase" if self._use_supabase() else "none_configured"
 
-    def get_storage_health(self) -> dict[str, str | bool]:
-        return self.last_write_status
-
-    def last_write_ok(self) -> bool:
-        return bool(self.last_write_status.get("ok", False))
-
-    def import_legacy_csv(self, rel_path: str, data: pd.DataFrame, skip_if_same: bool = True) -> bool:
-        existing = self._read(rel_path, list(data.columns))
-        if skip_if_same and not existing.empty:
-            old = existing.to_csv(index=False)
-            new = data.to_csv(index=False)
-            if hashlib.sha256(old.encode()).hexdigest() == hashlib.sha256(new.encode()).hexdigest():
-                return False
-        self._save(rel_path, data, "Import legacy CSV")
-        return True
-
     def get_ledger(self) -> pd.DataFrame:
         df = self._read("ledger", LEDGER_COLUMNS)
-        if df.empty:
-            return pd.DataFrame(columns=LEDGER_COLUMNS)
+        if df.empty: return pd.DataFrame(columns=LEDGER_COLUMNS)
         for c in ["Date", "Due_Date"]:
-            if c in df.columns:
-                df[c] = pd.to_datetime(df[c], errors="coerce").dt.date
-        for col in LEDGER_COLUMNS:
-            if col not in df.columns:
-                df[col] = ""
-        return df[LEDGER_COLUMNS]
+            if c in df.columns: df[c] = pd.to_datetime(df[c], errors="coerce").dt.date
+        return df
 
     def save_ledger(self, data: pd.DataFrame) -> None:
         save_df = data.copy()
-        save_df["Date"] = pd.to_datetime(save_df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
-        save_df["Due_Date"] = pd.to_datetime(save_df["Due_Date"], errors="coerce").dt.strftime("%Y-%m-%d")
-        self._save("ledger", save_df[LEDGER_COLUMNS], "Update Ledger Master")
+        save_df["Date"] = pd.to_datetime(save_df["Date"]).dt.strftime("%Y-%m-%d")
+        save_df["Due_Date"] = pd.to_datetime(save_df["Due_Date"]).dt.strftime("%Y-%m-%d")
+        self._save("ledger", save_df, "Update Ledger")
 
     def get_holdings(self) -> pd.DataFrame:
-        df = self._read("holdings", HOLDINGS_COLUMNS)
-        for col in HOLDINGS_COLUMNS:
-            if col not in df.columns:
-                df[col] = 0 if col != "Symbol" else ""
-        return df[HOLDINGS_COLUMNS]
+        return self._read("holdings", HOLDINGS_COLUMNS)
 
     def save_holdings(self, data: pd.DataFrame) -> None:
-        self._save("holdings", data[HOLDINGS_COLUMNS], "Update Holdings")
+        self._save("holdings", data, "Update Holdings")
 
     def get_terminal_data(self, logical_key: str) -> pd.DataFrame:
         cols = TERMINAL_SCHEMAS.get(logical_key, [])
-        df = self._read(logical_key, cols)
-        for col in cols:
-            if col not in df.columns:
-                df[col] = ""
-        return df[cols] if cols else df
+        return self._read(logical_key, cols)
 
     def save_terminal_data(self, logical_key: str, data: pd.DataFrame) -> None:
-        cols = TERMINAL_SCHEMAS.get(logical_key)
-        if cols:
-            for col in cols:
-                if col not in data.columns:
-                    data[col] = ""
-            data = data[cols]
         self._save(logical_key, data, f"Update {logical_key}")
 
     def list_stock_data_files(self) -> list[str]:
         rel_dir = PATHS["stock_data_dir"]
         if self._use_supabase():
-            files = self.supabase.list_paths(rel_dir + "/")
-            if files:
-                return sorted([Path(p).name for p in files])
+            # Public routing
+            files = self.supabase.list_paths(rel_dir + "/", table="public_Files")
+            return sorted([Path(p).name for p in files])
         return []
 
     def get_stock_data(self, filename: str) -> pd.DataFrame:
@@ -212,9 +166,9 @@ class DataStorage:
     def list_analysis_files(self) -> list[str]:
         rel_dir = PATHS["data_analysis_dir"]
         if self._use_supabase():
-            files = self.supabase.list_paths(rel_dir + "/")
-            if files:
-                return sorted([Path(p).name for p in files])
+            # Public routing
+            files = self.supabase.list_paths(rel_dir + "/", table="public_Files")
+            return sorted([Path(p).name for p in files])
         return []
 
     def get_analysis_data(self, filename: str) -> pd.DataFrame:
