@@ -1,5 +1,12 @@
 import os
 
+import subprocess
+def get_git_info():
+    try:
+        log = subprocess.check_output(["git", "log", "-n", "5", "--oneline"]).decode()
+        return f"RECENT COMMITS:\n{log}\n"
+    except:
+        return ""
 # --- CONFIGURATION ---
 OUTPUT_FILE = "Code_Master.txt"
 EXCLUDE_DIRS = {'.git', '__pycache__', 'venv', '.streamlit', 'Data'} 
