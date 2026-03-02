@@ -11,17 +11,8 @@ from Services.app.logger import log_event
 from Services.app.supabase_store import SupabaseConfig, SupabaseFileStore
 
 LEDGER_COLUMNS = [
-    "Date",
-    "Type",
-    "Category",
-    "Amount",
-    "Status",
-    "Due_Date",
-    "Ref_ID",
-    "Description",
-    "Is_Non_Cash",
-    "Dispute_Note",
-    "Fiscal_Year",
+    "Date", "Type", "Category", "Amount", "Status", "Due_Date",
+    "Ref_ID", "Description", "Is_Non_Cash", "Dispute_Note", "Fiscal_Year",
 ]
 HOLDINGS_COLUMNS = ["Symbol", "Total_Qty", "Pledged_Qty", "LTP", "Haircut"]
 
@@ -63,14 +54,13 @@ class DataStorage:
         self.local_root = local_root
         self.storage_config = storage_config or StorageConfig()
         self.sqlite_path = (local_root / self.storage_config.sqlite_path).resolve()
-        self.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
         self.supabase = SupabaseFileStore(supabase_config)
         self.last_write_status: dict[str, str | bool] = {
             "ok": True,
             "backend": self.active_backend(),
             "path": "",
             "remote_ok": True,
-            "local_ok": True,
+            "local_ok": False, # Local is permanently disabled
             "error": "",
         }
 
@@ -78,41 +68,21 @@ class DataStorage:
         return logical_key.replace("/", "__")
 
     def _use_supabase(self) -> bool:
-        if not self.supabase.enabled():
-            return False
-        return self.storage_config.backend in {"supabase", "csv"}
+        return self.supabase.enabled()
 
     def _resolve(self, logical_key: str) -> str:
         return PATHS.get(logical_key, logical_key)
 
-    def _read_sqlite(self, logical_key: str, columns: list[str]) -> pd.DataFrame:
-        table = self._table_name(logical_key)
-        if not self.sqlite_path.exists():
-            return pd.DataFrame(columns=columns)
-        try:
-            with sqlite3.connect(self.sqlite_path) as conn:
-                return pd.read_sql_query(f'SELECT * FROM "{table}"', conn)
-        except Exception:
-            return pd.DataFrame(columns=columns)
-
-    def _save_sqlite(self, logical_key: str, data: pd.DataFrame) -> None:
-        table = self._table_name(logical_key)
-        with sqlite3.connect(self.sqlite_path) as conn:
-            data.to_sql(table, conn, if_exists="replace", index=False)
-
     def _read(self, logical_key: str, columns: list[str]) -> pd.DataFrame:
         rel_path = self._resolve(logical_key)
-        if self.storage_config.backend == "sqlite":
-            return self._read_sqlite(logical_key, columns)
 
+        # Strictly enforce Supabase Reads
         if self._use_supabase():
             df = self.supabase.read_csv(rel_path, columns)
             if not df.empty:
                 return df
-
-        path = self.local_root / rel_path
-        if path.exists():
-            return pd.read_csv(path)
+                
+        # Return empty DataFrame if no data exists in Supabase
         return pd.DataFrame(columns=columns)
 
     def _set_status(self, *, ok: bool, path: str, remote_ok: bool, local_ok: bool, error: str = "") -> None:
@@ -128,29 +98,20 @@ class DataStorage:
     def _save(self, logical_key: str, data: pd.DataFrame, message: str) -> None:
         rel_path = self._resolve(logical_key)
         remote_ok = True
-        local_ok = True
         err = ""
 
-        if self.storage_config.backend == "sqlite":
-            self._save_sqlite(logical_key, data)
-
+        # Strictly enforce Supabase Writes (No Local File System)
         if self._use_supabase():
             try:
                 self.supabase.write_csv(rel_path, data)
             except Exception as ex:
                 remote_ok = False
                 err = f"Supabase write failed: {ex}"
+        else:
+            remote_ok = False
+            err = "Cloud Storage Error: Supabase is not configured properly in secrets.toml"
 
-        try:
-            path = self.local_root / rel_path
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(data.to_csv(index=False), encoding="utf-8")
-        except Exception as ex:
-            local_ok = False
-            err = f"{err} | Local mirror write failed: {ex}".strip(" |")
-
-        ok = remote_ok and local_ok if self._use_supabase() else local_ok
-        self._set_status(ok=ok, path=rel_path, remote_ok=remote_ok, local_ok=local_ok, error=err)
+        self._set_status(ok=remote_ok, path=rel_path, remote_ok=remote_ok, local_ok=False, error=err)
 
         log_event(
             "storage_write",
@@ -158,20 +119,18 @@ class DataStorage:
                 "path": rel_path,
                 "message": message,
                 "backend": self.active_backend(),
-                "ok": ok,
+                "ok": remote_ok,
                 "remote_ok": remote_ok,
-                "local_ok": local_ok,
+                "local_ok": False,
                 "error": err,
             },
         )
 
-        if not ok:
-            raise RuntimeError(err or "Storage write failed")
+        if not remote_ok:
+            raise RuntimeError(err)
 
     def active_backend(self) -> str:
-        if self._use_supabase():
-            return "supabase"
-        return self.storage_config.backend
+        return "supabase" if self._use_supabase() else "none_configured"
 
     def get_storage_health(self) -> dict[str, str | bool]:
         return self.last_write_status
@@ -240,9 +199,6 @@ class DataStorage:
             files = self.supabase.list_paths(rel_dir + "/")
             if files:
                 return sorted([Path(p).name for p in files])
-        local_dir = self.local_root / rel_dir
-        if local_dir.exists():
-            return sorted([f.name for f in local_dir.glob("*.csv")])
         return []
 
     def get_stock_data(self, filename: str) -> pd.DataFrame:
@@ -259,9 +215,6 @@ class DataStorage:
             files = self.supabase.list_paths(rel_dir + "/")
             if files:
                 return sorted([Path(p).name for p in files])
-        local_dir = self.local_root / rel_dir
-        if local_dir.exists():
-            return sorted([f.name for f in local_dir.glob("*.csv")])
         return []
 
     def get_analysis_data(self, filename: str) -> pd.DataFrame:
