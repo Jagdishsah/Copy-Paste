@@ -11,6 +11,17 @@ from Services.app.storage import DataStorage
 from Services.app.ui import inject_css, render_sidebar_holdings
 from supabase import create_client, Client
 
+
+#Caching
+if "ledger_df" not in st.session_state:
+    with st.spinner("Syncing with Cloud..."):
+        st.session_state.ledger_df = storage.get_ledger()
+        st.session_state.holdings_df = storage.get_holdings()
+        st.session_state.last_sync = datetime.now()
+# Now, instead of calling storage.get_ledger() in your tabs, 
+# you just use st.session_state.ledger_df. This is INSTANT (0ms).
+
+
 # --- 1. SUPABASE INITIALIZATION ---
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
