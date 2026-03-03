@@ -1,11 +1,15 @@
 import json
 from pathlib import Path
-
 import pandas as pd
 import streamlit as st
 
 from Services.app.config import load_storage_config, load_supabase_config
 from Services.app.storage import DataStorage
+
+# FIX: Import the safe rendering functions instead of using exec()
+from Data.Market_Data.Data_analysis.Advanced_analysis import render_advanced
+from Data.Market_Data.Data_analysis.Visual import render_visual
+from Services.Advisor import render_advisor
 
 storage = DataStorage(supabase_config=load_supabase_config(), local_root=Path('.'), storage_config=load_storage_config())
 
@@ -75,19 +79,10 @@ with tab2:
         st.dataframe(hist_df, use_container_width=True)
 
 with tab3:
-    namespace3 = globals().copy()
-    namespace3["__name__"] = "advanced_analysis_module"
-    with open("Data/Market_Data/Data_analysis/Advanced_analysis.py", encoding="utf-8") as f:
-        exec(compile(f.read(), "Advanced_analysis.py", "exec"), namespace3)
+    render_advanced(storage)
 
 with tab4:
-    namespace4 = globals().copy()
-    namespace4["__name__"] = "visual_analysis_module"
-    with open("Data/Market_Data/Data_analysis/Visual.py", encoding="utf-8") as f:
-        exec(compile(f.read(), "Visual.py", "exec"), namespace4)
+    render_visual(storage)
 
 with tab5:
-    namespace5 = globals().copy()
-    namespace5["__name__"] = "ai_advisor_module"
-    with open("Services/Advisor.py", encoding="utf-8") as f:
-        exec(compile(f.read(), "Advisor.py", "exec"), namespace5)
+    render_advisor(storage)
