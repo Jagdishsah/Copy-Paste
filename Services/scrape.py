@@ -73,6 +73,42 @@ async def fetch_symbol_data(client: httpx.AsyncClient, symbol: str) -> Dict:
         print(f"⚠️ Failed to fetch {symbol}: {e}")
         return result
 
+
+async def _get_market_data_async(symbols: List[str]) -> Dict[str, Dict[str, float]]:
+    limits = httpx.Limits(max_connections=MAX_CONCURRENT_REQUESTS)
+    async with httpx.AsyncClient(headers={'User-Agent': USER_AGENT}, limits=limits) as client:
+        tasks = [fetch_symbol_data(client, s) for s in symbols]
+        rows = await asyncio.gather(*tasks)
+
+    out: Dict[str, Dict[str, float]] = {}
+    for r in rows:
+        sym = str(r.get("Symbol", "")).upper().strip()
+        if not sym:
+            continue
+        out[sym] = {
+            "price": float(r.get("LTP", 0.0) or 0.0),
+            "change": float(r.get("Change", 0.0) or 0.0),
+            "high": float(r.get("High52", 0.0) or 0.0),
+            "low": float(r.get("Low52", 0.0) or 0.0),
+        }
+    return out
+
+
+def get_market_data(symbols: List[str]) -> Dict[str, Dict[str, float]]:
+    """Synchronous wrapper used by Streamlit tabs."""
+    clean_symbols = [str(s).upper().strip() for s in symbols if str(s).strip()]
+    if not clean_symbols:
+        return {}
+    try:
+        return asyncio.run(_get_market_data_async(clean_symbols))
+    except RuntimeError:
+        # Safe fallback when an event loop is already running.
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(_get_market_data_async(clean_symbols))
+        finally:
+            loop.close()
+
 async def run_market_update():
     """Main Orchestrator for the Scraper."""
     print(f"🚀 Starting Market Update at {datetime.now()}")
@@ -98,31 +134,3 @@ async def run_market_update():
 
     # 3. Fetch data concurrently
     limits = httpx.Limits(max_connections=MAX_CONCURRENT_REQUESTS)
-    async with httpx.AsyncClient(headers={'User-Agent': USER_AGENT}, limits=limits) as client:
-        tasks = [fetch_symbol_data(client, sym) for sym in symbols_to_track]
-        raw_results = await asyncio.gather(*tasks)
-
-    # 4. Validate with Pydantic and create DataFrame
-    validated_data = []
-    for item in raw_results:
-        try:
-            # This ensures the scraped data matches your V2 rules
-            valid_obj = PriceCache(**item)
-            validated_data.append(valid_obj.dict())
-        except Exception as e:
-            print(f"❌ Validation failed for {item['Symbol']}: {e}")
-
-    df_final = pd.DataFrame(validated_data)
-
-    # 5. Save to Supabase (public_Files table)
-    if not df_final.empty:
-        try:
-            storage._save("cache", df_final, f"Auto-Scrape Update: {len(df_final)} symbols")
-            log_event("scrape_success", {"count": len(df_final)})
-            print(f"✅ Successfully updated {len(df_final)} symbols to Cloud Cache.")
-        except Exception as e:
-            log_event("scrape_error", {"error": str(e)})
-            print(f"❌ Cloud Save Failed: {e}")
-
-if __name__ == "__main__":
-    asyncio.run(run_market_update())
