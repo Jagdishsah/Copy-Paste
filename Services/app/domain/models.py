@@ -1,6 +1,30 @@
 from pydantic import BaseModel, Field, field_validator
 from datetime import date
 from typing import Optional, List
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+
+@dataclass
+class SupabaseConfig:
+    url: str
+    key: str
+    table: str
+
+@dataclass
+class StorageConfig:
+    backend: str
+
+@dataclass
+class Auth_Config:
+    username: str
+    password: str
+
+@dataclass
+class PriceCache:
+    symbol: str
+    price: float
+    timestamp: datetime
 
 class LedgerEntry(BaseModel):
     Date: date
