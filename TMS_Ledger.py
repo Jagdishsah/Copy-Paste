@@ -1,25 +1,18 @@
 import importlib.util
 from pathlib import Path
-from datetime import datetime # Added missing import
+from datetime import datetime  # FIX: Added missing import
 
 import streamlit as st
 from supabase import create_client, Client
 
 # MUST BE THE FIRST STREAMLIT COMMAND!
-st.set_page_config(
-    page_title="NEPSE TMS Pro Ledger", 
-    page_icon="💹", 
-    layout="wide", 
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="NEPSE TMS Pro Ledger", page_icon="💹", layout="wide", initial_sidebar_state="expanded")
 
 from Services.app.config import load_storage_config, load_supabase_config
 from Services.app.storage import DataStorage
 from Services.app.ui import inject_css, render_sidebar_holdings
 
 # --- 1. SUPABASE INITIALIZATION ---
-# Using project config helpers for consistency
-supabase_cfg = load_supabase_config()
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
@@ -55,17 +48,18 @@ if "user" not in st.session_state:
         except Exception as e:
             st.error(f"Signup Failed: {e}")
             
-    st.stop() # 🛑 Blocks execution until logged in
+    st.stop() # 🛑 Stops execution until logged in
 
-# --- 3. CODEX TERMINAL (User is Logged In) ---
-# Initialize Storage AFTER login [cite: 425]
+# --- 3. INITIALIZE STORAGE (Must happen after Login and before Caching) ---
+# FIX: Moved storage initialization up so it is defined before the cache block runs
 storage = DataStorage(
-    supabase_config=supabase_cfg, 
+    supabase_config=load_supabase_config(), 
     local_root=Path("."), 
     storage_config=load_storage_config()
 )
 
-# Caching and Initial Sync logic moved here [cite: 33, 263]
+# --- 4. DATA CACHING ---
+# FIX: Moved caching block here so 'storage' and 'datetime' are now properly defined/imported
 if "ledger_df" not in st.session_state:
     with st.spinner("Syncing with Cloud..."):
         try:
@@ -73,12 +67,12 @@ if "ledger_df" not in st.session_state:
             st.session_state.holdings_df = storage.get_holdings()
             st.session_state.last_sync = datetime.now()
         except Exception as e:
-            st.error(f"Sync failed: {e}")
+            st.warning(f"Initial sync failed, using empty data. Error: {e}")
             st.session_state.ledger_df = None
 
+# --- 5. UI CONFIGURATION ---
 inject_css()
 
-# --- 4. NAVIGATION & ROUTING ---
 TAB_ROUTES = {
     "🏠 Dashboard": Path("Tabs/1_Dashboard/portfolio_view.py"),
     "✍️ Transaction Center": Path("Tabs/2_Transaction_Center/transaction_view.py"),
@@ -109,12 +103,13 @@ def run_tab(path: Path, storage: DataStorage) -> None:
 # Sidebar UI
 with st.sidebar:
     st.title("💹 TMS Pro")
-    st.caption(f"👤 {st.session_state['user'].email}")
+    current_user = st.session_state["user"]
+    st.success(f"👤 Logged in as: \n{current_user.email}")
     
     selected = st.radio("Navigation", list(TAB_ROUTES.keys()))
-    st.caption(f"Storage backend: {storage.active_backend()}") [cite: 353]
+    st.caption(f"Storage backend: {storage.active_backend()}")
     
-    # Use cached holdings if available
+    # Use cached holdings if available, otherwise fetch
     holdings = st.session_state.get("holdings_df", storage.get_holdings())
     render_sidebar_holdings(storage, holdings)
     
@@ -124,5 +119,5 @@ with st.sidebar:
         st.session_state.clear()
         st.rerun()
 
-# Execute selected tab
-run_tab(TAB_ROUTES[selected], storage) [cite: 424]
+# --- 6. RUN TAB ---
+run_tab(TAB_ROUTES[selected], storage)
