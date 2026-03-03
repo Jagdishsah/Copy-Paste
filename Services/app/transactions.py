@@ -73,6 +73,10 @@ def apply_smart_transaction(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     ledger_row = smart_to_ledger_row(txn)
     out_ledger = pd.concat([ledger_df, pd.DataFrame([ledger_row])], ignore_index=True)
+    if ledger_df.empty:
+        out_ledger = pd.DataFrame([ledger_row])
+    else:
+        out_ledger = pd.concat([ledger_df, pd.DataFrame([ledger_row])], ignore_index=True)
     for col in LEDGER_COLUMNS:
         if col not in out_ledger.columns:
             out_ledger[col] = ""
@@ -96,6 +100,11 @@ def apply_smart_transaction(
                 ],
                 ignore_index=True,
             )
+            new_row = {"Symbol": symbol, "Total_Qty": 0.0, "Pledged_Qty": 0.0, "LTP": float(txn.price), "Haircut": 25.0}
+            if out_holdings.empty:
+                out_holdings = pd.DataFrame([new_row], columns=HOLDINGS_COLUMNS)
+            else:
+                out_holdings = pd.concat([out_holdings, pd.DataFrame([new_row])], ignore_index=True)
 
         idx = out_holdings[out_holdings["Symbol"] == symbol].index[0]
         current_total = float(out_holdings.at[idx, "Total_Qty"])
