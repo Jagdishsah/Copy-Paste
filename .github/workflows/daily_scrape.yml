@@ -14,10 +14,12 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # FIXED: Changed 'checkout' to 'setup-python' here!
       - name: Set up Python
-        uses: actions/checkout@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          cache: 'pip' # Bonus: This makes future runs much faster!
 
       - name: Install Dependencies
         run: |
@@ -27,5 +29,4 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          # We pass these so scrape.py can talk to Supabase without streamlit
         run: python Services/scrape.py
